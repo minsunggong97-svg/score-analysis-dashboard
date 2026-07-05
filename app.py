@@ -1,3 +1,5 @@
+import base64
+import io
 import platform
 from pathlib import Path
 
@@ -220,29 +222,44 @@ def make_confidence_interval_plot(
     confidence_level: float,
     xlim: tuple[float, float],
 ):
-    fig_height = max(5.0, min(11.0, 0.085 * len(interval_df) + 2.0))
-    fig, ax = plt.subplots(figsize=(10, fig_height))
+    fig_width = max(10.0, min(28.0, 0.12 * len(interval_df) + 4.0))
+    fig, ax = plt.subplots(figsize=(fig_width, 5.2))
 
     for _, row in interval_df.iterrows():
         color = "#2ecc71" if row["contains_mean"] else "#e74c3c"
-        ax.hlines(row["trial"], row["lower"], row["upper"], color=color, linewidth=1.8)
-        ax.plot(row["sample_mean"], row["trial"], marker="o", color=color, markersize=3.8)
+        ax.vlines(row["trial"], row["lower"], row["upper"], color=color, linewidth=1.8)
+        ax.plot(row["trial"], row["sample_mean"], marker="o", color=color, markersize=3.8)
 
-    ax.axvline(
+    ax.axhline(
         population_mean,
         color="#f1c40f",
         linestyle="--",
         linewidth=2,
         label=f"전체 평균 ({population_mean:.1f}점)",
     )
-    ax.set_xlim(*xlim)
-    ax.invert_yaxis()
+    ax.set_ylim(*xlim)
+    ax.set_xlim(0.5, len(interval_df) + 0.5)
     ax.set_title(f"{confidence_level:.1f}% 신뢰구간 반복 시뮬레이션")
-    ax.set_xlabel("점수")
-    ax.set_ylabel("시행 번호")
+    ax.set_xlabel("시행 번호")
+    ax.set_ylabel("점수")
     ax.legend()
     fig.tight_layout()
     return fig
+
+
+def render_scrollable_figure(fig) -> None:
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    st.markdown(
+        f"""
+        <div style="overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px;">
+            <img src="data:image/png;base64,{encoded}" style="max-width: none; height: 520px;">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def main() -> None:
@@ -453,10 +470,10 @@ def main() -> None:
                 key="ci_confidence",
             )
             ci_seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=7, step=1, key="ci_seed")
-            ci_x_min = st.slider("x축 최소값", min_value=0, max_value=100, value=40, key="ci_x_min")
-            ci_x_max = st.slider("x축 최대값", min_value=0, max_value=100, value=100, key="ci_x_max")
+            ci_x_min = st.slider("점수축 최소값", min_value=0, max_value=100, value=40, key="ci_x_min")
+            ci_x_max = st.slider("점수축 최대값", min_value=0, max_value=100, value=100, key="ci_x_max")
             if ci_x_min >= ci_x_max:
-                st.warning("x축 최소값은 최대값보다 작아야 합니다. 기본 범위 40~100점으로 표시합니다.")
+                st.warning("점수축 최소값은 최대값보다 작아야 합니다. 기본 범위 40~100점으로 표시합니다.")
                 ci_x_range = (40, 100)
             else:
                 ci_x_range = (ci_x_min, ci_x_max)
@@ -477,12 +494,10 @@ def main() -> None:
         with ci_result_col:
             st.caption(
                 f"현재 설정: n={ci_sample_size}, {ci_trials}회, 신뢰수준={ci_confidence:.1f}%, "
-                f"x축={ci_x_range[0]}~{ci_x_range[1]}점"
+                f"점수축={ci_x_range[0]}~{ci_x_range[1]}점. 0점은 아래, 100점은 위쪽 방향입니다."
             )
-            st.pyplot(
-                make_confidence_interval_plot(interval_df, population_mean, ci_confidence, ci_x_range),
-                use_container_width=True,
-            )
+            fig = make_confidence_interval_plot(interval_df, population_mean, ci_confidence, ci_x_range)
+            render_scrollable_figure(fig)
 
             ci_metric1, ci_metric2, ci_metric3, ci_metric4 = st.columns(4)
             ci_metric1.metric("전체 평균", f"{population_mean:.1f}점")
@@ -499,9 +514,10 @@ def main() -> None:
             st.markdown(
                 """
                 1. 신뢰수준을 `95%`, 반복 횟수를 `100`으로 두고 초록색 구간과 빨간색 구간의 비율을 확인합니다.
-                2. 표본 크기 `n`을 키우면 가로선 길이가 짧아지는지 확인합니다.
-                3. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
-                4. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
+                2. 점수축은 아래가 낮은 점수, 위가 높은 점수입니다. 시행 번호는 가로 방향으로 나열됩니다.
+                3. 표본 크기 `n`을 키우면 세로 신뢰구간 길이가 짧아지는지 확인합니다.
+                4. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
+                5. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
                 """
             )
 
