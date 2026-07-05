@@ -134,9 +134,15 @@ def simulate_sample_means(scores: pd.Series, sample_size: int, num_trials: int, 
     return np.array(sample_means)
 
 
-def make_clt_plot(sample_means: np.ndarray, population_mean: float, sample_size: int, num_trials: int):
+def make_clt_plot(
+    sample_means: np.ndarray,
+    population_mean: float,
+    sample_size: int,
+    num_trials: int,
+    bins: int,
+):
     fig, ax = plt.subplots(figsize=(10, 4.8))
-    sns.histplot(sample_means, kde=True, color="#9b59b6", edgecolor="white", ax=ax)
+    sns.histplot(sample_means, kde=True, bins=bins, color="#9b59b6", edgecolor="white", ax=ax)
     ax.axvline(
         population_mean,
         color="#e74c3c",
@@ -245,7 +251,7 @@ def main() -> None:
         )
 
         max_sample_size = min(len(scores), 50)
-        sim_col1, sim_col2, sim_col3 = st.columns([1, 1, 0.8])
+        sim_col1, sim_col2, sim_col3, sim_col4 = st.columns([1, 1, 0.8, 1])
         with sim_col1:
             default_sample_size = min(30, max_sample_size)
             sample_size = st.slider(
@@ -258,6 +264,8 @@ def main() -> None:
             num_trials = st.slider("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
         with sim_col3:
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
+        with sim_col4:
+            clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
 
         if st.button("시뮬레이션 시작", use_container_width=True):
             save_clt_result(scores, score_column, sample_size, num_trials, int(seed))
@@ -274,7 +282,7 @@ def main() -> None:
                 f"n={result_sample_size}, {result_num_trials}회, 시드={clt_result['seed']}"
             )
             st.pyplot(
-                make_clt_plot(sample_means, population_mean, result_sample_size, result_num_trials),
+                make_clt_plot(sample_means, population_mean, result_sample_size, result_num_trials, clt_bins),
                 use_container_width=True,
             )
 
