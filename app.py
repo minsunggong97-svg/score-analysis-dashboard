@@ -143,12 +143,11 @@ def make_clt_plot(
     show_ci: bool,
     ci_lower: float,
     ci_upper: float,
-    confidence_level: float,
 ):
     fig, ax = plt.subplots(figsize=(10, 4.8))
     sns.histplot(sample_means, kde=True, bins=bins, color="#9b59b6", edgecolor="white", ax=ax)
     if show_ci:
-        ax.axvspan(ci_lower, ci_upper, color="#f1c40f", alpha=0.18, label=f"{confidence_level:.1f}% 신뢰구간")
+        ax.axvspan(ci_lower, ci_upper, color="#f1c40f", alpha=0.18, label="95% 신뢰구간")
         ax.axvline(ci_lower, color="#f39c12", linestyle=":", linewidth=2, label=f"하한 ({ci_lower:.1f}점)")
         ax.axvline(ci_upper, color="#f39c12", linestyle=":", linewidth=2, label=f"상한 ({ci_upper:.1f}점)")
     ax.axvline(
@@ -166,11 +165,9 @@ def make_clt_plot(
     return fig
 
 
-def calculate_confidence_interval(sample_means: np.ndarray, confidence_level: float) -> tuple[float, float, float]:
+def calculate_confidence_interval(sample_means: np.ndarray) -> tuple[float, float, float]:
     center = sample_means.mean()
-    alpha = 1 - confidence_level / 100
-    z_score = stats.norm.ppf(1 - alpha / 2)
-    margin = z_score * sample_means.std(ddof=1)
+    margin = 1.96 * sample_means.std(ddof=1)
     lower = center - margin
     upper = center + margin
     return lower, upper, upper - lower
@@ -254,7 +251,7 @@ def main() -> None:
         st.write(
             "전체 성적 데이터에서 무작위로 일부 학생을 뽑아 표본평균을 구하고, "
             "이 과정을 반복했을 때 표본평균들이 어떤 분포를 이루는지 확인합니다. "
-            "숫자를 입력하고 엔터를 치면 현재 값으로 그래프가 자동 갱신됩니다."
+            "슬라이더를 조정하면 현재 값으로 그래프가 자동 갱신됩니다."
         )
 
         control_col, result_col = st.columns([0.9, 2.1])
@@ -263,41 +260,37 @@ def main() -> None:
             st.markdown("#### 조작 패널")
             max_sample_size = min(len(scores), 50)
             default_sample_size = min(30, max_sample_size)
-            sample_size = st.number_input(
+            sample_size = st.slider(
                 "한 번에 뽑을 학생 수 (표본 크기 n)",
                 min_value=1,
                 max_value=max_sample_size,
                 value=default_sample_size,
-                step=1,
             )
-            num_trials = st.number_input("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
+            num_trials = st.slider("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
-            clt_bins = st.number_input("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15, step=1)
-            show_ci = st.toggle("신뢰구간 표시", value=True)
-            confidence_level = st.number_input("신뢰수준 (%)", min_value=50.0, max_value=99.9, value=95.0, step=0.5)
-            st.caption("숫자를 입력하고 엔터를 치면 오른쪽 그래프가 자동으로 갱신됩니다.")
+            clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
+            show_ci = st.toggle("95% 신뢰구간 표시", value=True)
+            st.caption("슬라이더를 조정하면 오른쪽 그래프가 자동으로 갱신됩니다.")
 
-        sample_means = simulate_sample_means(scores, int(sample_size), int(num_trials), int(seed))
+        sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
         population_mean = scores.mean()
-        ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means, float(confidence_level))
+        ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means)
 
         with result_col:
             st.caption(
-                f"현재 설정: `{score_column}` 열, n={int(sample_size)}, {int(num_trials)}회, "
-                f"시드={int(seed)}, 신뢰수준={confidence_level:.1f}%. "
-                "숫자를 입력하고 엔터를 치면 그래프가 자동으로 갱신됩니다."
+                f"현재 설정: `{score_column}` 열, n={sample_size}, {num_trials}회, 시드={seed}. "
+                "슬라이더를 조정하면 그래프가 자동으로 갱신됩니다."
             )
             st.pyplot(
                 make_clt_plot(
                     sample_means,
                     population_mean,
-                    int(sample_size),
-                    int(num_trials),
-                    int(clt_bins),
+                    sample_size,
+                    num_trials,
+                    clt_bins,
                     show_ci,
                     ci_lower,
                     ci_upper,
-                    float(confidence_level),
                 ),
                 use_container_width=True,
             )
@@ -309,20 +302,19 @@ def main() -> None:
 
             if show_ci:
                 ci_col1, ci_col2, ci_col3 = st.columns(3)
-                ci_col1.metric(f"{confidence_level:.1f}% 신뢰구간 하한", f"{ci_lower:.1f}점")
-                ci_col2.metric(f"{confidence_level:.1f}% 신뢰구간 상한", f"{ci_upper:.1f}점")
+                ci_col1.metric("95% 신뢰구간 하한", f"{ci_lower:.1f}점")
+                ci_col2.metric("95% 신뢰구간 상한", f"{ci_upper:.1f}점")
                 ci_col3.metric("신뢰구간 길이", f"{ci_length:.1f}점")
 
             if show_ci:
                 st.info(
-                    f"표본 크기 **n={int(sample_size)}**로 {int(num_trials)}번 반복했을 때 "
-                    f"{confidence_level:.1f}% 신뢰구간 길이는 "
+                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복했을 때 95% 신뢰구간 길이는 "
                     f"**{ci_length:.1f}점**입니다. 신뢰구간 길이가 짧을수록 표본평균들이 더 좁게 모여 "
                     "평균 추정이 안정적이라는 뜻입니다."
                 )
             else:
                 st.info(
-                    f"표본 크기 **n={int(sample_size)}**로 {int(num_trials)}번 반복하면 표본평균들이 "
+                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
                     f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
                     "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
                 )
@@ -330,9 +322,9 @@ def main() -> None:
         with st.expander("발표 조작 예시"):
             st.markdown(
                 """
-                1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 입력해 표본평균이 크게 흔들리는 모습을 보여줍니다.
-                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 입력해 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
-                3. `신뢰구간 표시`를 켜고 신뢰수준을 `90`, `95`, `99`로 바꾸며 신뢰구간 길이가 어떻게 달라지는지 확인합니다.
+                1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
+                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
+                3. `95% 신뢰구간 표시`를 켜고 신뢰구간 길이가 어떻게 줄어드는지 확인합니다.
                 4. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
