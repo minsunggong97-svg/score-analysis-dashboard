@@ -158,18 +158,6 @@ def make_clt_plot(
     return fig
 
 
-def save_clt_result(scores: pd.Series, score_column: str, sample_size: int, num_trials: int, seed: int) -> None:
-    sample_means = simulate_sample_means(scores, sample_size, num_trials, seed)
-    st.session_state.clt_result = {
-        "sample_means": sample_means,
-        "population_mean": scores.mean(),
-        "sample_size": sample_size,
-        "num_trials": num_trials,
-        "seed": seed,
-        "score_column": score_column,
-    }
-
-
 def main() -> None:
     set_korean_font()
 
@@ -247,7 +235,8 @@ def main() -> None:
         st.subheader("표본평균 시뮬레이터")
         st.write(
             "전체 성적 데이터에서 무작위로 일부 학생을 뽑아 표본평균을 구하고, "
-            "이 과정을 반복했을 때 표본평균들이 어떤 분포를 이루는지 확인합니다."
+            "이 과정을 반복했을 때 표본평균들이 어떤 분포를 이루는지 확인합니다. "
+            "슬라이더를 조정하면 현재 값으로 그래프가 자동 갱신됩니다."
         )
 
         max_sample_size = min(len(scores), 50)
@@ -267,43 +256,34 @@ def main() -> None:
         with sim_col4:
             clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
 
-        if st.button("시뮬레이션 시작", use_container_width=True):
-            save_clt_result(scores, score_column, sample_size, num_trials, int(seed))
+        sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
+        population_mean = scores.mean()
 
-        clt_result = st.session_state.get("clt_result")
-        if clt_result is not None:
-            sample_means = clt_result["sample_means"]
-            population_mean = clt_result["population_mean"]
-            result_sample_size = clt_result["sample_size"]
-            result_num_trials = clt_result["num_trials"]
+        st.caption(
+            f"현재 설정: `{score_column}` 열, n={sample_size}, {num_trials}회, 시드={seed}. "
+            "슬라이더를 조정하면 그래프가 자동으로 갱신됩니다."
+        )
+        st.pyplot(
+            make_clt_plot(sample_means, population_mean, sample_size, num_trials, clt_bins),
+            use_container_width=True,
+        )
 
-            st.caption(
-                f"표시 중인 결과: `{clt_result['score_column']}` 열, "
-                f"n={result_sample_size}, {result_num_trials}회, 시드={clt_result['seed']}"
-            )
-            st.pyplot(
-                make_clt_plot(sample_means, population_mean, result_sample_size, result_num_trials, clt_bins),
-                use_container_width=True,
-            )
+        result_col1, result_col2, result_col3 = st.columns(3)
+        result_col1.metric("전체 평균", f"{population_mean:.1f}점")
+        result_col2.metric("표본평균들의 평균", f"{sample_means.mean():.1f}점")
+        result_col3.metric("표본평균들의 표준편차", f"{sample_means.std(ddof=1):.2f}")
 
-            result_col1, result_col2, result_col3 = st.columns(3)
-            result_col1.metric("전체 평균", f"{population_mean:.1f}점")
-            result_col2.metric("표본평균들의 평균", f"{sample_means.mean():.1f}점")
-            result_col3.metric("표본평균들의 표준편차", f"{sample_means.std(ddof=1):.2f}")
-
-            st.info(
-                f"표본 크기 **n={result_sample_size}**로 {result_num_trials}번 반복하면 표본평균들이 "
-                f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
-                "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
-            )
-        else:
-            st.caption("슬라이더를 조절한 뒤 `시뮬레이션 시작`을 누르면 결과 그래프가 표시됩니다.")
+        st.info(
+            f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
+            f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
+            "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
+        )
 
         with st.expander("발표 조작 예시"):
             st.markdown(
                 """
-                1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 두고 실행해 표본평균이 크게 흔들리는 모습을 보여줍니다.
-                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 표본평균들이 전체 평균 주변에 모이는 모습을 비교합니다.
+                1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
+                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
                 3. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
