@@ -5,12 +5,13 @@
 ## 주요 기능
 
 - 엑셀 `.xlsx` 또는 CSV 파일 업로드
-- 점수 열 자동 선택
+- 사이드바에서 점수 열과 히스토그램 구간 선택
 - 평균, 표준편차, 중앙값, 사분위수 확인
 - 히스토그램과 밀도 곡선 표시
 - 상자수염그림으로 이상치 확인
 - Q-Q Plot과 Shapiro-Wilk 검정으로 정규성 확인
 - 파일 없이도 가상 110명 데이터로 미리보기
+- 발표 전후에 활용할 수 있는 `presentation.html` 슬라이드 포함
 
 ## 로컬 실행 방법
 
@@ -18,6 +19,10 @@
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+## 발표 슬라이드
+
+`presentation.html` 파일을 브라우저로 열면 발표용 슬라이드를 볼 수 있습니다.
 
 ## Streamlit Community Cloud 배포
 

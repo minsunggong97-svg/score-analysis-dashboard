@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>확률과 통계 성적 분석 발표</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --line: rgba(255, 255, 255, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top left, #1e3a8a 0, var(--bg) 42%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Nanum Gothic", sans-serif;
+    }
+
+    main {
+      height: 100vh;
+      overflow: auto;
+      scroll-snap-type: y mandatory;
+    }
+
+    section {
+      min-height: 100vh;
+      padding: 8vh 9vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      scroll-snap-align: start;
+    }
+
+    h1 {
+      margin: 0 0 20px;
+      font-size: clamp(44px, 7vw, 82px);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      margin: 0 0 28px;
+      font-size: clamp(34px, 5vw, 60px);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    p {
+      max-width: 900px;
+      color: var(--muted);
+      font-size: clamp(20px, 2.2vw, 30px);
+      line-height: 1.55;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      margin-top: 30px;
+    }
+
+    .card {
+      min-height: 210px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(17, 24, 39, 0.72);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 27px;
+    }
+
+    .card span {
+      color: var(--muted);
+      font-size: 21px;
+      line-height: 1.55;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 34px;
+    }
+
+    .metric {
+      padding: 24px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(34, 197, 94, 0.12));
+      border: 1px solid var(--line);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 42px;
+      margin-bottom: 8px;
+    }
+
+    .metric small {
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 30px;
+    }
+
+    .step {
+      padding: 22px;
+      border-left: 5px solid var(--accent-2);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-size: 21px;
+      line-height: 1.5;
+    }
+
+    .step b {
+      display: block;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .footer {
+      position: fixed;
+      right: 28px;
+      bottom: 22px;
+      color: rgba(248, 250, 252, 0.55);
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .grid,
+      .metric-row,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <div class="eyebrow">Probability & Statistics</div>
+      <h1>110명 성적 데이터로 보는<br />분포와 정규성 분석</h1>
+      <p>
+        엑셀 성적 데이터를 시각화하여 평균, 표준편차, 이상치, 정규분포와의 유사성을 한눈에 확인합니다.
+      </p>
+    </section>
+
+    <section>
+      <div class="eyebrow">Why 110 Students?</div>
+      <h2>110명은 통계적 경향을 보기 좋은 표본입니다</h2>
+      <div class="metric-row">
+        <div class="metric"><b>110</b><small>분석 대상 학생 수</small></div>
+        <div class="metric"><b>30+</b><small>중심극한정리를 기대할 수 있는 기준</small></div>
+        <div class="metric"><b>3</b><small>핵심 시각화 그래프</small></div>
+        <div class="metric"><b>1</b><small>발표용 대시보드</small></div>
+      </div>
+      <p>
+        표본 수가 충분하면 일부 학생의 우연한 고득점이나 저득점보다 전체 분포의 형태를 더 안정적으로 해석할 수 있습니다.
+      </p>
+    </section>
+
+    <section>
+      <div class="eyebrow">Analysis Toolkit</div>
+      <h2>세 가지 그래프로 성적을 입체적으로 해석합니다</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>히스토그램</strong>
+          <span>점수가 어느 구간에 많이 몰려 있는지 확인하고, 전체 분포가 종 모양에 가까운지 살펴봅니다.</span>
+        </div>
+        <div class="card">
+          <strong>상자수염그림</strong>
+          <span>중앙값, 사분위수, 이상치를 통해 상위권과 하위권의 퍼짐 정도를 비교합니다.</span>
+        </div>
+        <div class="card">
+          <strong>Q-Q Plot</strong>
+          <span>실제 성적 데이터가 이론적 정규분포와 얼마나 비슷한지 시각적으로 판단합니다.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">Presentation Flow</div>
+      <h2>발표는 문제 제기에서 실시간 분석까지 이어갑니다</h2>
+      <div class="flow">
+        <div class="step"><b>1. 질문</b>우리 반 성적은 정규분포에 가까울까?</div>
+        <div class="step"><b>2. 데이터</b>110명의 점수를 엑셀 파일로 준비합니다.</div>
+        <div class="step"><b>3. 시각화</b>대시보드에 업로드해 그래프를 즉시 확인합니다.</div>
+        <div class="step"><b>4. 해석</b>평균, 표준편차, 이상치, 정규성을 근거로 결론을 말합니다.</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">Conclusion</div>
+      <h2>데이터 분석은 계산보다 해석이 중요합니다</h2>
+      <p>
+        이번 대시보드는 단순히 그래프를 그리는 도구가 아니라, 성적 데이터가 어떤 형태로 분포하는지
+        근거를 가지고 설명하게 해 주는 발표 도구입니다. 실제 발표에서는 엑셀 파일을 업로드한 뒤
+        그래프를 하나씩 해석하면 설득력 있는 흐름을 만들 수 있습니다.
+      </p>
+    </section>
+  </main>
+  <div class="footer">스크롤 또는 방향키로 슬라이드를 넘기세요</div>
+</body>
+</html>
