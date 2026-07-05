@@ -1,6 +1,8 @@
 import platform
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
@@ -22,6 +24,9 @@ def set_korean_font() -> None:
     elif system == "Windows":
         plt.rcParams["font.family"] = "Malgun Gothic"
     else:
+        nanum_font = Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf")
+        if nanum_font.exists():
+            fm.fontManager.addfont(nanum_font)
         plt.rcParams["font.family"] = "NanumGothic"
 
     plt.rcParams["axes.unicode_minus"] = False
