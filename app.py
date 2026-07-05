@@ -216,6 +216,78 @@ def simulate_confidence_intervals(
     return pd.DataFrame(rows)
 
 
+def calculate_single_sample_interval(
+    scores: pd.Series,
+    sample_size: int,
+    confidence_level: float,
+    seed: int,
+) -> dict:
+    rng = np.random.default_rng(seed)
+    sample = rng.choice(scores.to_numpy(), size=sample_size, replace=False)
+    sample_mean = sample.mean()
+    sample_std = sample.std(ddof=1)
+    standard_error = sample_std / np.sqrt(sample_size)
+    z_score = stats.norm.ppf(1 - (1 - confidence_level / 100) / 2)
+    margin = z_score * standard_error
+    lower = sample_mean - margin
+    upper = sample_mean + margin
+    population_mean = scores.mean()
+
+    return {
+        "sample": sample,
+        "sample_mean": sample_mean,
+        "sample_std": sample_std,
+        "standard_error": standard_error,
+        "lower": lower,
+        "upper": upper,
+        "length": upper - lower,
+        "population_mean": population_mean,
+        "contains_mean": lower <= population_mean <= upper,
+    }
+
+
+def make_single_sample_interval_plot(
+    result: dict,
+    confidence_level: float,
+    bins: int,
+    xlim: tuple[float, float],
+):
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    color = "#2ecc71" if result["contains_mean"] else "#e74c3c"
+
+    sns.histplot(result["sample"], bins=bins, color="#95a5a6", edgecolor="white", alpha=0.65, ax=ax)
+    ax.axvspan(
+        result["lower"],
+        result["upper"],
+        color=color,
+        alpha=0.16,
+        label=f"{confidence_level:.1f}% 신뢰구간",
+    )
+    ax.axvline(result["lower"], color=color, linestyle=":", linewidth=2, label=f"하한 ({result['lower']:.1f}점)")
+    ax.axvline(result["upper"], color=color, linestyle=":", linewidth=2, label=f"상한 ({result['upper']:.1f}점)")
+    ax.axvline(
+        result["sample_mean"],
+        color="#2980b9",
+        linestyle="-",
+        linewidth=2,
+        label=f"표본평균 ({result['sample_mean']:.1f}점)",
+    )
+    ax.axvline(
+        result["population_mean"],
+        color="#f1c40f",
+        linestyle="--",
+        linewidth=2,
+        label=f"전체 평균 ({result['population_mean']:.1f}점)",
+    )
+    ax.set_title("단일 표본으로 만든 신뢰구간")
+    ax.set_xlabel("점수")
+    ax.set_ylabel("표본 학생 수")
+    ax.set_xlim(*xlim)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def make_confidence_interval_plot(
     interval_df: pd.DataFrame,
     population_mean: float,
@@ -301,8 +373,13 @@ def main() -> None:
         st.error("선택한 열에서 숫자 점수를 찾을 수 없습니다.")
         return
 
-    tab1, tab2, tab3 = st.tabs(
-        ["1단계: 모집단 성적 분석", "2단계: 중심극한정리 시뮬레이션", "3단계: 신뢰구간 시뮬레이션"]
+    tab1, tab2, tab3, tab4 = st.tabs(
+        [
+            "1단계: 모집단 성적 분석",
+            "2단계: 중심극한정리 시뮬레이션",
+            "3단계: 신뢰구간 시뮬레이션",
+            "4단계: 단일 표본 신뢰구간",
+        ]
     )
 
     with tab1:
@@ -556,6 +633,103 @@ def main() -> None:
                 3. 표본 크기 `n`을 키우면 세로 신뢰구간 길이가 짧아지는지 확인합니다.
                 4. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
                 5. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
+                """
+            )
+
+    with tab4:
+        st.subheader("단일 표본 신뢰구간")
+        if len(scores) < 2:
+            st.warning("단일 표본 신뢰구간은 최소 2개 이상의 점수 데이터가 필요합니다.")
+            return
+
+        st.write(
+            "현실에서는 보통 표본을 한 번만 뽑고, 그 표본의 평균과 표준편차로 신뢰구간을 계산합니다. "
+            "이 탭은 단 한 번 뽑은 표본의 히스토그램 위에 신뢰구간과 실제 전체 평균을 함께 표시합니다."
+        )
+
+        single_control_col, single_result_col = st.columns([0.9, 2.1])
+
+        with single_control_col:
+            st.markdown("#### 조작 패널")
+            single_max_sample_size = min(len(scores), 100)
+            single_default_sample_size = min(30, single_max_sample_size)
+            single_sample_size = st.slider(
+                "표본 크기 n",
+                min_value=2,
+                max_value=single_max_sample_size,
+                value=max(2, single_default_sample_size),
+                key="single_sample_size",
+            )
+            single_confidence = st.slider(
+                "신뢰수준 (%)",
+                min_value=50.0,
+                max_value=99.9,
+                value=95.0,
+                step=0.5,
+                key="single_confidence",
+            )
+            single_seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=21, step=1, key="single_seed")
+            single_bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=10, key="single_bins")
+            single_x_min = st.slider("점수축 최소값", min_value=0, max_value=100, value=0, key="single_x_min")
+            single_x_max = st.slider("점수축 최대값", min_value=0, max_value=100, value=100, key="single_x_max")
+            if single_x_min >= single_x_max:
+                st.warning("점수축 최소값은 최대값보다 작아야 합니다. 기본 범위 0~100점으로 표시합니다.")
+                single_x_range = (0, 100)
+            else:
+                single_x_range = (single_x_min, single_x_max)
+            st.caption("시드를 바꾸면 새로운 단일 표본을 확인할 수 있습니다.")
+
+        single_result = calculate_single_sample_interval(
+            scores,
+            single_sample_size,
+            single_confidence,
+            int(single_seed),
+        )
+
+        with single_result_col:
+            status_text = "포함" if single_result["contains_mean"] else "미포함"
+            st.caption(
+                f"현재 설정: n={single_sample_size}, 신뢰수준={single_confidence:.1f}%, "
+                f"시드={int(single_seed)}, 실제 평균 {status_text}"
+            )
+            st.pyplot(
+                make_single_sample_interval_plot(
+                    single_result,
+                    single_confidence,
+                    single_bins,
+                    single_x_range,
+                ),
+                use_container_width=True,
+            )
+
+            single_metric1, single_metric2, single_metric3, single_metric4 = st.columns(4)
+            single_metric1.metric("표본평균", f"{single_result['sample_mean']:.1f}점")
+            single_metric2.metric("표본표준편차", f"{single_result['sample_std']:.1f}")
+            single_metric3.metric("신뢰구간 길이", f"{single_result['length']:.1f}점")
+            single_metric4.metric("실제 평균 포함", status_text)
+
+            interval_col1, interval_col2, interval_col3 = st.columns(3)
+            interval_col1.metric("신뢰구간 하한", f"{single_result['lower']:.1f}점")
+            interval_col2.metric("신뢰구간 상한", f"{single_result['upper']:.1f}점")
+            interval_col3.metric("전체 평균", f"{single_result['population_mean']:.1f}점")
+
+            if single_result["contains_mean"]:
+                st.success("이번 표본으로 만든 신뢰구간 안에 실제 전체 평균이 들어 있습니다.")
+            else:
+                st.error("이번 표본으로 만든 신뢰구간은 실제 전체 평균을 포함하지 못했습니다.")
+
+            st.info(
+                "3단계는 이 절차를 여러 번 반복했을 때의 성공률을 보여주고, "
+                "4단계는 현실처럼 표본을 한 번만 뽑아 하나의 신뢰구간을 만드는 장면을 보여줍니다."
+            )
+
+        with st.expander("발표 조작 예시"):
+            st.markdown(
+                """
+                1. 표본 크기와 신뢰수준을 정한 뒤, 한 번 뽑은 표본의 히스토그램을 봅니다.
+                2. 파란 선은 표본평균, 노란 점선은 실제 전체 평균입니다.
+                3. 색칠된 신뢰구간 안에 노란 점선이 들어오면 이번 표본은 성공한 사례입니다.
+                4. 난수 시드를 바꾸면 다른 한 번의 표본 추출 결과를 확인할 수 있습니다.
                 """
             )
 
