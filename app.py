@@ -144,11 +144,12 @@ def make_clt_plot(
     ci_lower: float,
     ci_upper: float,
     xlim: tuple[float, float] | None = None,
+    confidence_level: float = 95.0,
 ):
     fig, ax = plt.subplots(figsize=(10, 4.8))
     sns.histplot(sample_means, kde=True, bins=bins, color="#9b59b6", edgecolor="white", ax=ax)
     if show_ci:
-        ax.axvspan(ci_lower, ci_upper, color="#f1c40f", alpha=0.18, label="95% 신뢰구간")
+        ax.axvspan(ci_lower, ci_upper, color="#f1c40f", alpha=0.18, label=f"{confidence_level:.1f}% 신뢰구간")
         ax.axvline(ci_lower, color="#f39c12", linestyle=":", linewidth=2, label=f"하한 ({ci_lower:.1f}점)")
         ax.axvline(ci_upper, color="#f39c12", linestyle=":", linewidth=2, label=f"상한 ({ci_upper:.1f}점)")
     ax.axvline(
@@ -168,9 +169,11 @@ def make_clt_plot(
     return fig
 
 
-def calculate_confidence_interval(sample_means: np.ndarray) -> tuple[float, float, float]:
+def calculate_confidence_interval(sample_means: np.ndarray, confidence_level: float) -> tuple[float, float, float]:
     center = sample_means.mean()
-    margin = 1.96 * sample_means.std(ddof=1)
+    alpha = 1 - confidence_level / 100
+    z_score = stats.norm.ppf(1 - alpha / 2)
+    margin = z_score * sample_means.std(ddof=1)
     lower = center - margin
     upper = center + margin
     return lower, upper, upper - lower
@@ -272,7 +275,8 @@ def main() -> None:
             num_trials = st.slider("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
             clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
-            show_ci = st.toggle("95% 신뢰구간 표시", value=True)
+            show_ci = st.toggle("신뢰구간 표시", value=True)
+            confidence_level = st.slider("신뢰구간 퍼센트", min_value=50.0, max_value=99.9, value=95.0, step=0.5)
             auto_x_axis = st.toggle("x축 자동 조절", value=True)
             x_axis_range = None
             if not auto_x_axis:
@@ -287,7 +291,7 @@ def main() -> None:
 
         sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
         population_mean = scores.mean()
-        ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means)
+        ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means, confidence_level)
         x_axis_label = "자동" if x_axis_range is None else f"{x_axis_range[0]}~{x_axis_range[1]}점"
 
         with result_col:
@@ -306,6 +310,7 @@ def main() -> None:
                     ci_lower,
                     ci_upper,
                     x_axis_range,
+                    confidence_level,
                 ),
                 use_container_width=True,
             )
@@ -317,13 +322,14 @@ def main() -> None:
 
             if show_ci:
                 ci_col1, ci_col2, ci_col3 = st.columns(3)
-                ci_col1.metric("95% 신뢰구간 하한", f"{ci_lower:.1f}점")
-                ci_col2.metric("95% 신뢰구간 상한", f"{ci_upper:.1f}점")
+                ci_col1.metric(f"{confidence_level:.1f}% 신뢰구간 하한", f"{ci_lower:.1f}점")
+                ci_col2.metric(f"{confidence_level:.1f}% 신뢰구간 상한", f"{ci_upper:.1f}점")
                 ci_col3.metric("신뢰구간 길이", f"{ci_length:.1f}점")
 
             if show_ci:
                 st.info(
-                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복했을 때 95% 신뢰구간 길이는 "
+                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복했을 때 "
+                    f"{confidence_level:.1f}% 신뢰구간 길이는 "
                     f"**{ci_length:.1f}점**입니다. 신뢰구간 길이가 짧을수록 표본평균들이 더 좁게 모여 "
                     "평균 추정이 안정적이라는 뜻입니다."
                 )
@@ -340,7 +346,7 @@ def main() -> None:
                 1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
                 2. `x축 자동 조절`을 끄고 x축을 `0~100점`으로 고정하면 분포가 얼마나 넓게 퍼졌는지 비교하기 쉽습니다.
                 3. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
-                4. `95% 신뢰구간 표시`를 켜고 신뢰구간 길이가 어떻게 줄어드는지 확인합니다.
+                4. `신뢰구간 표시`를 켜고 신뢰구간 퍼센트를 조절하며 길이가 어떻게 달라지는지 확인합니다.
                 5. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
