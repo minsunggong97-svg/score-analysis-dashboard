@@ -179,6 +179,72 @@ def calculate_confidence_interval(sample_means: np.ndarray, confidence_level: fl
     return lower, upper, upper - lower
 
 
+def simulate_confidence_intervals(
+    scores: pd.Series,
+    sample_size: int,
+    num_trials: int,
+    confidence_level: float,
+    seed: int,
+) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    score_values = scores.to_numpy()
+    population_mean = scores.mean()
+    z_score = stats.norm.ppf(1 - (1 - confidence_level / 100) / 2)
+    rows = []
+
+    for trial in range(1, num_trials + 1):
+        sample = rng.choice(score_values, size=sample_size, replace=False)
+        sample_mean = sample.mean()
+        standard_error = sample.std(ddof=1) / np.sqrt(sample_size)
+        margin = z_score * standard_error
+        lower = sample_mean - margin
+        upper = sample_mean + margin
+        contains_mean = lower <= population_mean <= upper
+        rows.append(
+            {
+                "trial": trial,
+                "sample_mean": sample_mean,
+                "lower": lower,
+                "upper": upper,
+                "length": upper - lower,
+                "contains_mean": contains_mean,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def make_confidence_interval_plot(
+    interval_df: pd.DataFrame,
+    population_mean: float,
+    confidence_level: float,
+    xlim: tuple[float, float],
+):
+    fig_height = max(5.0, min(11.0, 0.085 * len(interval_df) + 2.0))
+    fig, ax = plt.subplots(figsize=(10, fig_height))
+
+    for _, row in interval_df.iterrows():
+        color = "#2ecc71" if row["contains_mean"] else "#e74c3c"
+        ax.hlines(row["trial"], row["lower"], row["upper"], color=color, linewidth=1.8)
+        ax.plot(row["sample_mean"], row["trial"], marker="o", color=color, markersize=3.8)
+
+    ax.axvline(
+        population_mean,
+        color="#f1c40f",
+        linestyle="--",
+        linewidth=2,
+        label=f"전체 평균 ({population_mean:.1f}점)",
+    )
+    ax.set_xlim(*xlim)
+    ax.invert_yaxis()
+    ax.set_title(f"{confidence_level:.1f}% 신뢰구간 반복 시뮬레이션")
+    ax.set_xlabel("점수")
+    ax.set_ylabel("시행 번호")
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def main() -> None:
     set_korean_font()
 
@@ -218,7 +284,9 @@ def main() -> None:
         st.error("선택한 열에서 숫자 점수를 찾을 수 없습니다.")
         return
 
-    tab1, tab2 = st.tabs(["1단계: 모집단 성적 분석", "2단계: 중심극한정리 시뮬레이션"])
+    tab1, tab2, tab3 = st.tabs(
+        ["1단계: 모집단 성적 분석", "2단계: 중심극한정리 시뮬레이션", "3단계: 신뢰구간 시뮬레이션"]
+    )
 
     with tab1:
         st.subheader(f"`{score_column}` 열 분석 결과")
@@ -348,6 +416,92 @@ def main() -> None:
                 3. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
                 4. `신뢰구간 표시`를 켜고 신뢰구간 퍼센트를 조절하며 길이가 어떻게 달라지는지 확인합니다.
                 5. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
+                """
+            )
+
+    with tab3:
+        st.subheader("신뢰구간 반복 시뮬레이터")
+        if len(scores) < 2:
+            st.warning("신뢰구간 시뮬레이션은 최소 2개 이상의 점수 데이터가 필요합니다.")
+            return
+
+        st.write(
+            "같은 방식으로 표본을 여러 번 뽑아 신뢰구간을 만들고, 각 구간이 실제 전체 평균을 포함하는지 확인합니다. "
+            "초록색 구간은 전체 평균을 포함하고, 빨간색 구간은 포함하지 못한 경우입니다."
+        )
+
+        ci_control_col, ci_result_col = st.columns([0.9, 2.1])
+
+        with ci_control_col:
+            st.markdown("#### 조작 패널")
+            ci_max_sample_size = min(len(scores), 100)
+            ci_default_sample_size = min(30, ci_max_sample_size)
+            ci_sample_size = st.slider(
+                "표본 크기 n",
+                min_value=2,
+                max_value=ci_max_sample_size,
+                value=max(2, ci_default_sample_size),
+                key="ci_sample_size",
+            )
+            ci_trials = st.slider("반복 횟수", min_value=20, max_value=200, value=100, step=10, key="ci_trials")
+            ci_confidence = st.slider(
+                "신뢰수준 (%)",
+                min_value=50.0,
+                max_value=99.9,
+                value=95.0,
+                step=0.5,
+                key="ci_confidence",
+            )
+            ci_seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=7, step=1, key="ci_seed")
+            ci_x_min = st.slider("x축 최소값", min_value=0, max_value=100, value=40, key="ci_x_min")
+            ci_x_max = st.slider("x축 최대값", min_value=0, max_value=100, value=100, key="ci_x_max")
+            if ci_x_min >= ci_x_max:
+                st.warning("x축 최소값은 최대값보다 작아야 합니다. 기본 범위 40~100점으로 표시합니다.")
+                ci_x_range = (40, 100)
+            else:
+                ci_x_range = (ci_x_min, ci_x_max)
+            st.caption("슬라이더를 조정하면 오른쪽 신뢰구간 차트가 자동으로 갱신됩니다.")
+
+        interval_df = simulate_confidence_intervals(
+            scores,
+            ci_sample_size,
+            ci_trials,
+            ci_confidence,
+            int(ci_seed),
+        )
+        population_mean = scores.mean()
+        hit_count = int(interval_df["contains_mean"].sum())
+        hit_rate = hit_count / len(interval_df) * 100
+        average_length = interval_df["length"].mean()
+
+        with ci_result_col:
+            st.caption(
+                f"현재 설정: n={ci_sample_size}, {ci_trials}회, 신뢰수준={ci_confidence:.1f}%, "
+                f"x축={ci_x_range[0]}~{ci_x_range[1]}점"
+            )
+            st.pyplot(
+                make_confidence_interval_plot(interval_df, population_mean, ci_confidence, ci_x_range),
+                use_container_width=True,
+            )
+
+            ci_metric1, ci_metric2, ci_metric3, ci_metric4 = st.columns(4)
+            ci_metric1.metric("전체 평균", f"{population_mean:.1f}점")
+            ci_metric2.metric("성공 구간", f"{hit_count}/{len(interval_df)}개")
+            ci_metric3.metric("실제 포함 비율", f"{hit_rate:.1f}%")
+            ci_metric4.metric("평균 구간 길이", f"{average_length:.1f}점")
+
+            st.info(
+                f"{ci_confidence:.1f}% 신뢰수준은 같은 방법을 반복했을 때 구간이 실제 평균을 포함하는 비율을 뜻합니다. "
+                "표본 크기 n을 키우면 구간 길이가 짧아져 추정이 더 정밀해지는지 확인해 보세요."
+            )
+
+        with st.expander("발표 조작 예시"):
+            st.markdown(
+                """
+                1. 신뢰수준을 `95%`, 반복 횟수를 `100`으로 두고 초록색 구간과 빨간색 구간의 비율을 확인합니다.
+                2. 표본 크기 `n`을 키우면 가로선 길이가 짧아지는지 확인합니다.
+                3. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
+                4. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
                 """
             )
 
