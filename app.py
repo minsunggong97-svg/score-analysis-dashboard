@@ -143,6 +143,7 @@ def make_clt_plot(
     show_ci: bool,
     ci_lower: float,
     ci_upper: float,
+    xlim: tuple[float, float] | None = None,
 ):
     fig, ax = plt.subplots(figsize=(10, 4.8))
     sns.histplot(sample_means, kde=True, bins=bins, color="#9b59b6", edgecolor="white", ax=ax)
@@ -160,6 +161,8 @@ def make_clt_plot(
     ax.set_title(f"표본평균의 분포 (n={sample_size}, {num_trials}회 추출)")
     ax.set_xlabel("표본평균 점수")
     ax.set_ylabel("빈도")
+    if xlim is not None:
+        ax.set_xlim(*xlim)
     ax.legend()
     fig.tight_layout()
     return fig
@@ -270,16 +273,27 @@ def main() -> None:
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
             clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
             show_ci = st.toggle("95% 신뢰구간 표시", value=True)
+            auto_x_axis = st.toggle("x축 자동 조절", value=True)
+            x_axis_range = None
+            if not auto_x_axis:
+                x_min = st.slider("x축 최소값", min_value=0, max_value=100, value=0)
+                x_max = st.slider("x축 최대값", min_value=0, max_value=100, value=100)
+                if x_min >= x_max:
+                    st.warning("x축 최소값은 최대값보다 작아야 합니다. 기본 범위 0~100점으로 표시합니다.")
+                    x_axis_range = (0, 100)
+                else:
+                    x_axis_range = (x_min, x_max)
             st.caption("슬라이더를 조정하면 오른쪽 그래프가 자동으로 갱신됩니다.")
 
         sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
         population_mean = scores.mean()
         ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means)
+        x_axis_label = "자동" if x_axis_range is None else f"{x_axis_range[0]}~{x_axis_range[1]}점"
 
         with result_col:
             st.caption(
                 f"현재 설정: `{score_column}` 열, n={sample_size}, {num_trials}회, 시드={seed}. "
-                "슬라이더를 조정하면 그래프가 자동으로 갱신됩니다."
+                f"x축: {x_axis_label}. 슬라이더를 조정하면 그래프가 자동으로 갱신됩니다."
             )
             st.pyplot(
                 make_clt_plot(
@@ -291,6 +305,7 @@ def main() -> None:
                     show_ci,
                     ci_lower,
                     ci_upper,
+                    x_axis_range,
                 ),
                 use_container_width=True,
             )
@@ -323,9 +338,10 @@ def main() -> None:
             st.markdown(
                 """
                 1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
-                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
-                3. `95% 신뢰구간 표시`를 켜고 신뢰구간 길이가 어떻게 줄어드는지 확인합니다.
-                4. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
+                2. `x축 자동 조절`을 끄고 x축을 `0~100점`으로 고정하면 분포가 얼마나 넓게 퍼졌는지 비교하기 쉽습니다.
+                3. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
+                4. `95% 신뢰구간 표시`를 켜고 신뢰구간 길이가 어떻게 줄어드는지 확인합니다.
+                5. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
 
