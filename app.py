@@ -349,6 +349,9 @@ def main() -> None:
 
         with control_col:
             st.markdown("#### 조작 패널")
+            if "clt_trial_mode" not in st.session_state:
+                st.session_state.clt_trial_mode = "slider"
+
             max_sample_size = min(len(scores), 50)
             default_sample_size = min(30, max_sample_size)
             sample_size = st.slider(
@@ -357,7 +360,36 @@ def main() -> None:
                 max_value=max_sample_size,
                 value=default_sample_size,
             )
-            num_trials = st.slider("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
+
+            mode_col1, mode_col2, mode_col3 = st.columns(3)
+            with mode_col1:
+                if st.button("1회", use_container_width=True):
+                    st.session_state.clt_trial_mode = "single"
+            with mode_col2:
+                if st.button("10000회", use_container_width=True):
+                    st.session_state.clt_trial_mode = "many"
+            with mode_col3:
+                if st.button("슬라이더", use_container_width=True):
+                    st.session_state.clt_trial_mode = "slider"
+
+            trial_slider_disabled = st.session_state.clt_trial_mode != "slider"
+            slider_trials = st.slider(
+                "반복 추출 횟수",
+                min_value=10,
+                max_value=1000,
+                value=500,
+                step=10,
+                disabled=trial_slider_disabled,
+            )
+            if st.session_state.clt_trial_mode == "single":
+                num_trials = 1
+                st.caption("현재 모드: 1회 보기. 반복 횟수 슬라이더가 비활성화됩니다.")
+            elif st.session_state.clt_trial_mode == "many":
+                num_trials = 10000
+                st.caption("현재 모드: 10000회 보기. 반복 횟수 슬라이더가 비활성화됩니다.")
+            else:
+                num_trials = slider_trials
+
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
             clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
             show_ci = st.toggle("신뢰구간 표시", value=True)
@@ -376,7 +408,13 @@ def main() -> None:
 
         sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
         population_mean = scores.mean()
-        ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means, confidence_level)
+        if len(sample_means) >= 2:
+            ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means, confidence_level)
+            sample_means_std = sample_means.std(ddof=1)
+        else:
+            ci_lower = ci_upper = sample_means[0]
+            ci_length = 0.0
+            sample_means_std = 0.0
         x_axis_label = "자동" if x_axis_range is None else f"{x_axis_range[0]}~{x_axis_range[1]}점"
 
         with result_col:
@@ -403,7 +441,7 @@ def main() -> None:
             result_col1, result_col2, result_col3 = st.columns(3)
             result_col1.metric("전체 평균", f"{population_mean:.1f}점")
             result_col2.metric("표본평균들의 평균", f"{sample_means.mean():.1f}점")
-            result_col3.metric("표본평균들의 표준편차", f"{sample_means.std(ddof=1):.2f}")
+            result_col3.metric("표본평균들의 표준편차", f"{sample_means_std:.2f}")
 
             if show_ci:
                 ci_col1, ci_col2, ci_col3 = st.columns(3)
