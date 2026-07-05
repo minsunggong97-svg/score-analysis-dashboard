@@ -142,18 +142,10 @@ def make_clt_plot(
     sample_size: int,
     num_trials: int,
     bins: int,
-    show_ci: bool,
-    ci_lower: float,
-    ci_upper: float,
     xlim: tuple[float, float] | None = None,
-    confidence_level: float = 95.0,
 ):
     fig, ax = plt.subplots(figsize=(10, 4.8))
     sns.histplot(sample_means, kde=True, bins=bins, color="#9b59b6", edgecolor="white", ax=ax)
-    if show_ci:
-        ax.axvspan(ci_lower, ci_upper, color="#f1c40f", alpha=0.18, label=f"{confidence_level:.1f}% 신뢰구간")
-        ax.axvline(ci_lower, color="#f39c12", linestyle=":", linewidth=2, label=f"하한 ({ci_lower:.1f}점)")
-        ax.axvline(ci_upper, color="#f39c12", linestyle=":", linewidth=2, label=f"상한 ({ci_upper:.1f}점)")
     ax.axvline(
         population_mean,
         color="#e74c3c",
@@ -251,11 +243,20 @@ def make_single_sample_interval_plot(
     confidence_level: float,
     bins: int,
     xlim: tuple[float, float],
+    show_curve: bool,
 ):
     fig, ax = plt.subplots(figsize=(10, 4.8))
     color = "#2ecc71" if result["contains_mean"] else "#e74c3c"
 
-    sns.histplot(result["sample"], bins=bins, color="#95a5a6", edgecolor="white", alpha=0.65, ax=ax)
+    sns.histplot(
+        result["sample"],
+        bins=bins,
+        kde=show_curve and len(result["sample"]) >= 5,
+        color="#95a5a6",
+        edgecolor="white",
+        alpha=0.65,
+        ax=ax,
+    )
     ax.axvspan(
         result["lower"],
         result["upper"],
@@ -469,8 +470,6 @@ def main() -> None:
 
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
             clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
-            show_ci = st.toggle("신뢰구간 표시", value=True)
-            confidence_level = st.slider("신뢰구간 퍼센트", min_value=50.0, max_value=99.9, value=95.0, step=0.5)
             auto_x_axis = st.toggle("x축 자동 조절", value=True)
             x_axis_range = None
             if not auto_x_axis:
@@ -485,13 +484,7 @@ def main() -> None:
 
         sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
         population_mean = scores.mean()
-        if len(sample_means) >= 2:
-            ci_lower, ci_upper, ci_length = calculate_confidence_interval(sample_means, confidence_level)
-            sample_means_std = sample_means.std(ddof=1)
-        else:
-            ci_lower = ci_upper = sample_means[0]
-            ci_length = 0.0
-            sample_means_std = 0.0
+        sample_means_std = sample_means.std(ddof=1) if len(sample_means) >= 2 else 0.0
         x_axis_label = "자동" if x_axis_range is None else f"{x_axis_range[0]}~{x_axis_range[1]}점"
 
         with result_col:
@@ -506,11 +499,7 @@ def main() -> None:
                     sample_size,
                     num_trials,
                     clt_bins,
-                    show_ci,
-                    ci_lower,
-                    ci_upper,
                     x_axis_range,
-                    confidence_level,
                 ),
                 use_container_width=True,
             )
@@ -520,25 +509,11 @@ def main() -> None:
             result_col2.metric("표본평균들의 평균", f"{sample_means.mean():.1f}점")
             result_col3.metric("표본평균들의 표준편차", f"{sample_means_std:.2f}")
 
-            if show_ci:
-                ci_col1, ci_col2, ci_col3 = st.columns(3)
-                ci_col1.metric(f"{confidence_level:.1f}% 신뢰구간 하한", f"{ci_lower:.1f}점")
-                ci_col2.metric(f"{confidence_level:.1f}% 신뢰구간 상한", f"{ci_upper:.1f}점")
-                ci_col3.metric("신뢰구간 길이", f"{ci_length:.1f}점")
-
-            if show_ci:
-                st.info(
-                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복했을 때 "
-                    f"{confidence_level:.1f}% 신뢰구간 길이는 "
-                    f"**{ci_length:.1f}점**입니다. 신뢰구간 길이가 짧을수록 표본평균들이 더 좁게 모여 "
-                    "평균 추정이 안정적이라는 뜻입니다."
-                )
-            else:
-                st.info(
-                    f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
-                    f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
-                    "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
-                )
+            st.info(
+                f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
+                f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
+                "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
+            )
 
         with st.expander("발표 조작 예시"):
             st.markdown(
@@ -546,8 +521,7 @@ def main() -> None:
                 1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
                 2. `x축 자동 조절`을 끄고 x축을 `0~100점`으로 고정하면 분포가 얼마나 넓게 퍼졌는지 비교하기 쉽습니다.
                 3. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
-                4. `신뢰구간 표시`를 켜고 신뢰구간 퍼센트를 조절하며 길이가 어떻게 달라지는지 확인합니다.
-                5. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
+                4. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
 
@@ -670,6 +644,7 @@ def main() -> None:
             )
             single_seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=21, step=1, key="single_seed")
             single_bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=10, key="single_bins")
+            show_single_curve = st.toggle("곡선 표시", value=True, key="show_single_curve")
             single_x_min = st.slider("점수축 최소값", min_value=0, max_value=100, value=0, key="single_x_min")
             single_x_max = st.slider("점수축 최대값", min_value=0, max_value=100, value=100, key="single_x_max")
             if single_x_min >= single_x_max:
@@ -698,6 +673,7 @@ def main() -> None:
                     single_confidence,
                     single_bins,
                     single_x_range,
+                    show_single_curve,
                 ),
                 use_container_width=True,
             )
@@ -727,9 +703,10 @@ def main() -> None:
             st.markdown(
                 """
                 1. 표본 크기와 신뢰수준을 정한 뒤, 한 번 뽑은 표본의 히스토그램을 봅니다.
-                2. 파란 선은 표본평균, 노란 점선은 실제 전체 평균입니다.
-                3. 색칠된 신뢰구간 안에 노란 점선이 들어오면 이번 표본은 성공한 사례입니다.
-                4. 난수 시드를 바꾸면 다른 한 번의 표본 추출 결과를 확인할 수 있습니다.
+                2. `곡선 표시`를 켜면 표본 분포의 부드러운 모양을 함께 볼 수 있습니다.
+                3. 파란 선은 표본평균, 노란 점선은 실제 전체 평균입니다.
+                4. 색칠된 신뢰구간 안에 노란 점선이 들어오면 이번 표본은 성공한 사례입니다.
+                5. 난수 시드를 바꾸면 다른 한 번의 표본 추출 결과를 확인할 수 있습니다.
                 """
             )
 
