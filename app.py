@@ -124,6 +124,34 @@ def make_qq_plot(scores: pd.Series):
     return fig
 
 
+def simulate_sample_means(scores: pd.Series, sample_size: int, num_trials: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    score_values = scores.to_numpy()
+    sample_means = [
+        rng.choice(score_values, size=sample_size, replace=False).mean()
+        for _ in range(num_trials)
+    ]
+    return np.array(sample_means)
+
+
+def make_clt_plot(sample_means: np.ndarray, population_mean: float, sample_size: int, num_trials: int):
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    sns.histplot(sample_means, kde=True, color="#9b59b6", edgecolor="white", ax=ax)
+    ax.axvline(
+        population_mean,
+        color="#e74c3c",
+        linestyle="--",
+        linewidth=2,
+        label=f"전체 평균 ({population_mean:.1f}점)",
+    )
+    ax.set_title(f"표본평균의 분포 (n={sample_size}, {num_trials}회 추출)")
+    ax.set_xlabel("표본평균 점수")
+    ax.set_ylabel("빈도")
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def main() -> None:
     set_korean_font()
 
@@ -163,36 +191,91 @@ def main() -> None:
         st.error("선택한 열에서 숫자 점수를 찾을 수 없습니다.")
         return
 
-    st.subheader(f"`{score_column}` 열 분석 결과")
-    render_summary(scores)
+    tab1, tab2 = st.tabs(["1단계: 모집단 성적 분석", "2단계: 중심극한정리 시뮬레이션"])
 
-    top_left, top_right = st.columns(2)
-    with top_left:
-        st.markdown("#### 📌 성적 분포")
-        st.pyplot(make_histogram(scores, bins), use_container_width=True)
+    with tab1:
+        st.subheader(f"`{score_column}` 열 분석 결과")
+        render_summary(scores)
 
-    with top_right:
-        st.markdown("#### 📌 정규성 확인")
-        st.pyplot(make_qq_plot(scores), use_container_width=True)
+        top_left, top_right = st.columns(2)
+        with top_left:
+            st.markdown("#### 성적 분포")
+            st.pyplot(make_histogram(scores, bins), use_container_width=True)
 
-    bottom_left, bottom_right = st.columns([1.05, 0.95])
-    with bottom_left:
-        st.markdown("#### 📌 성적 밀집도와 이상치")
-        st.pyplot(make_boxplot(scores), use_container_width=True)
+        with top_right:
+            st.markdown("#### 정규성 확인")
+            st.pyplot(make_qq_plot(scores), use_container_width=True)
 
-    with bottom_right:
-        p_value, normality_message = calculate_normality(scores)
-        st.markdown("#### 📝 발표 요약")
+        bottom_left, bottom_right = st.columns([1.05, 0.95])
+        with bottom_left:
+            st.markdown("#### 성적 밀집도와 이상치")
+            st.pyplot(make_boxplot(scores), use_container_width=True)
+
+        with bottom_right:
+            p_value, normality_message = calculate_normality(scores)
+            st.markdown("#### 발표 요약")
+            st.write(
+                f"이 데이터는 평균 **{scores.mean():.1f}점**을 중심으로 분포하며, "
+                f"표준편차는 **{scores.std():.1f}점**입니다."
+            )
+            if p_value is not None:
+                st.write(f"Shapiro-Wilk 정규성 검정 p-value는 **{p_value:.4f}**입니다.")
+            st.info(normality_message)
+
+            with st.expander("데이터 미리보기"):
+                st.dataframe(df.head(20), use_container_width=True)
+
+    with tab2:
+        st.subheader("표본평균 시뮬레이터")
         st.write(
-            f"이 데이터는 평균 **{scores.mean():.1f}점**을 중심으로 분포하며, "
-            f"표준편차는 **{scores.std():.1f}점**입니다."
+            "전체 성적 데이터에서 무작위로 일부 학생을 뽑아 표본평균을 구하고, "
+            "이 과정을 반복했을 때 표본평균들이 어떤 분포를 이루는지 확인합니다."
         )
-        if p_value is not None:
-            st.write(f"Shapiro-Wilk 정규성 검정 p-value는 **{p_value:.4f}**입니다.")
-        st.info(normality_message)
 
-        with st.expander("데이터 미리보기"):
-            st.dataframe(df.head(20), use_container_width=True)
+        max_sample_size = min(len(scores), 50)
+        sim_col1, sim_col2, sim_col3 = st.columns([1, 1, 0.8])
+        with sim_col1:
+            default_sample_size = min(30, max_sample_size)
+            sample_size = st.slider(
+                "한 번에 뽑을 학생 수 (표본 크기 n)",
+                min_value=1,
+                max_value=max_sample_size,
+                value=default_sample_size,
+            )
+        with sim_col2:
+            num_trials = st.slider("반복 추출 횟수", min_value=10, max_value=1000, value=500, step=10)
+        with sim_col3:
+            seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
+
+        if st.button("시뮬레이션 시작", use_container_width=True):
+            sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
+            population_mean = scores.mean()
+            st.pyplot(
+                make_clt_plot(sample_means, population_mean, sample_size, num_trials),
+                use_container_width=True,
+            )
+
+            result_col1, result_col2, result_col3 = st.columns(3)
+            result_col1.metric("전체 평균", f"{population_mean:.1f}점")
+            result_col2.metric("표본평균들의 평균", f"{sample_means.mean():.1f}점")
+            result_col3.metric("표본평균들의 표준편차", f"{sample_means.std(ddof=1):.2f}")
+
+            st.info(
+                f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
+                f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
+                "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
+            )
+        else:
+            st.caption("슬라이더를 조절한 뒤 `시뮬레이션 시작`을 누르면 결과 그래프가 표시됩니다.")
+
+        with st.expander("발표 조작 예시"):
+            st.markdown(
+                """
+                1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 두고 실행해 표본평균이 크게 흔들리는 모습을 보여줍니다.
+                2. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 표본평균들이 전체 평균 주변에 모이는 모습을 비교합니다.
+                3. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
+                """
+            )
 
 
 if __name__ == "__main__":
