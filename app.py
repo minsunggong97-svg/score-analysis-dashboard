@@ -164,7 +164,7 @@ def main() -> None:
     with st.sidebar:
         st.header("⚙️ 분석 설정")
         uploaded_file = st.file_uploader("성적 파일 업로드", type=["xlsx", "csv"])
-        use_sample = st.toggle("가상 110명 데이터 사용", value=uploaded_file is None)
+        use_sample = st.toggle("가상 예시 데이터 사용", value=uploaded_file is None)
         bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=15)
 
         st.divider()
