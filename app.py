@@ -152,6 +152,18 @@ def make_clt_plot(sample_means: np.ndarray, population_mean: float, sample_size:
     return fig
 
 
+def save_clt_result(scores: pd.Series, score_column: str, sample_size: int, num_trials: int, seed: int) -> None:
+    sample_means = simulate_sample_means(scores, sample_size, num_trials, seed)
+    st.session_state.clt_result = {
+        "sample_means": sample_means,
+        "population_mean": scores.mean(),
+        "sample_size": sample_size,
+        "num_trials": num_trials,
+        "seed": seed,
+        "score_column": score_column,
+    }
+
+
 def main() -> None:
     set_korean_font()
 
@@ -248,10 +260,21 @@ def main() -> None:
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
 
         if st.button("시뮬레이션 시작", use_container_width=True):
-            sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
-            population_mean = scores.mean()
+            save_clt_result(scores, score_column, sample_size, num_trials, int(seed))
+
+        clt_result = st.session_state.get("clt_result")
+        if clt_result is not None:
+            sample_means = clt_result["sample_means"]
+            population_mean = clt_result["population_mean"]
+            result_sample_size = clt_result["sample_size"]
+            result_num_trials = clt_result["num_trials"]
+
+            st.caption(
+                f"표시 중인 결과: `{clt_result['score_column']}` 열, "
+                f"n={result_sample_size}, {result_num_trials}회, 시드={clt_result['seed']}"
+            )
             st.pyplot(
-                make_clt_plot(sample_means, population_mean, sample_size, num_trials),
+                make_clt_plot(sample_means, population_mean, result_sample_size, result_num_trials),
                 use_container_width=True,
             )
 
@@ -261,7 +284,7 @@ def main() -> None:
             result_col3.metric("표본평균들의 표준편차", f"{sample_means.std(ddof=1):.2f}")
 
             st.info(
-                f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
+                f"표본 크기 **n={result_sample_size}**로 {result_num_trials}번 반복하면 표본평균들이 "
                 f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
                 "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
             )
