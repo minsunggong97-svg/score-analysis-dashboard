@@ -384,7 +384,7 @@ def main() -> None:
         selected_subject = None
         if data_source == "내장 성적 데이터" and default_data_available:
             selected_subject = st.selectbox("내장 과목 선택", list(default_datasets.keys()))
-        bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=15)
+        bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=20)
 
         st.divider()
         st.info("발표할 때는 사이드바를 접으면 그래프를 더 크게 보여줄 수 있습니다.")
@@ -518,7 +518,7 @@ def main() -> None:
                 num_trials = slider_trials
 
             seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=42, step=1)
-            clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=15)
+            clt_bins = st.slider("표본평균 히스토그램 구간", min_value=5, max_value=40, value=20)
             auto_x_axis = st.toggle("x축 자동 조절", value=True)
             x_axis_range = None
             if not auto_x_axis:
@@ -692,7 +692,7 @@ def main() -> None:
                 key="single_confidence",
             )
             single_seed = st.number_input("난수 시드", min_value=0, max_value=9999, value=21, step=1, key="single_seed")
-            single_bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=10, key="single_bins")
+            single_bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=20, key="single_bins")
             show_single_curve = st.toggle("곡선 표시", value=True, key="show_single_curve")
             single_x_min = st.slider("점수축 최소값", min_value=0, max_value=100, value=0, key="single_x_min")
             single_x_max = st.slider("점수축 최대값", min_value=0, max_value=100, value=100, key="single_x_max")
