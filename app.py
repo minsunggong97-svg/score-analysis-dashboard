@@ -12,7 +12,11 @@ import seaborn as sns
 import streamlit as st
 
 
-DEFAULT_DATA_PATH = Path(__file__).parent / "data" / "scores.csv"
+DATA_DIR = Path(__file__).parent / "data"
+DEFAULT_DATASETS = {
+    "확통": DATA_DIR / "scores.csv",
+    "영어": DATA_DIR / "english_scores.csv",
+}
 
 
 st.set_page_config(
@@ -52,11 +56,11 @@ def read_uploaded_file(uploaded_file) -> pd.DataFrame:
     return pd.read_excel(uploaded_file)
 
 
-def load_default_scores() -> pd.DataFrame | None:
-    if not DEFAULT_DATA_PATH.exists():
+def load_default_scores(path: Path) -> pd.DataFrame | None:
+    if not path.exists():
         return None
     try:
-        return pd.read_csv(DEFAULT_DATA_PATH)
+        return pd.read_csv(path)
     except Exception:
         return None
 
@@ -349,8 +353,12 @@ def render_scrollable_figure(fig) -> None:
 
 def main() -> None:
     set_korean_font()
-    default_df = load_default_scores()
-    default_data_available = default_df is not None
+    default_datasets = {
+        subject: df
+        for subject, path in DEFAULT_DATASETS.items()
+        if (df := load_default_scores(path)) is not None
+    }
+    default_data_available = bool(default_datasets)
 
     with st.sidebar:
         st.header("⚙️ 분석 설정")
@@ -372,18 +380,21 @@ def main() -> None:
             index=default_index,
             help="발표용 기본 데이터, 직접 업로드한 파일, 가상 예시 데이터 중 선택합니다.",
         )
+        selected_subject = None
+        if data_source == "내장 성적 데이터" and default_data_available:
+            selected_subject = st.selectbox("내장 과목 선택", list(default_datasets.keys()))
         bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=15)
 
         st.divider()
         st.info("발표할 때는 사이드바를 접으면 그래프를 더 크게 보여줄 수 있습니다.")
 
-    st.title("📊 확률과 통계 성적 분석 보고서")
+    st.title("📊 성적 분석 보고서")
     st.caption("성적 분포, 이상치, 정규성 여부를 한 화면에서 확인하는 발표용 대시보드입니다.")
 
     try:
-        if data_source == "내장 성적 데이터" and default_df is not None:
-            df = default_df
-            data_source_label = "내장 성적 데이터"
+        if data_source == "내장 성적 데이터" and selected_subject in default_datasets:
+            df = default_datasets[selected_subject]
+            data_source_label = f"내장 성적 데이터 ({selected_subject})"
         elif data_source == "업로드 데이터" and uploaded_file is not None:
             df = read_uploaded_file(uploaded_file)
             data_source_label = f"업로드 데이터 ({uploaded_file.name})"
