@@ -12,6 +12,9 @@ import seaborn as sns
 import streamlit as st
 
 
+DEFAULT_DATA_PATH = Path(__file__).parent / "data" / "scores.csv"
+
+
 st.set_page_config(
     page_title="성적 분석 대시보드",
     page_icon="📊",
@@ -47,6 +50,15 @@ def read_uploaded_file(uploaded_file) -> pd.DataFrame:
     if file_name.endswith(".csv"):
         return pd.read_csv(uploaded_file)
     return pd.read_excel(uploaded_file)
+
+
+def load_default_scores() -> pd.DataFrame | None:
+    if not DEFAULT_DATA_PATH.exists():
+        return None
+    try:
+        return pd.read_csv(DEFAULT_DATA_PATH)
+    except Exception:
+        return None
 
 
 def make_sample_scores() -> pd.DataFrame:
@@ -337,11 +349,29 @@ def render_scrollable_figure(fig) -> None:
 
 def main() -> None:
     set_korean_font()
+    default_df = load_default_scores()
+    default_data_available = default_df is not None
 
     with st.sidebar:
         st.header("⚙️ 분석 설정")
         uploaded_file = st.file_uploader("성적 파일 업로드", type=["xlsx", "csv"])
-        use_sample = st.toggle("가상 예시 데이터 사용", value=uploaded_file is None)
+        data_options = []
+        if default_data_available:
+            data_options.append("내장 성적 데이터")
+        if uploaded_file is not None:
+            data_options.append("업로드 데이터")
+        data_options.append("가상 예시 데이터")
+
+        default_index = 0
+        if not default_data_available and uploaded_file is not None:
+            default_index = data_options.index("업로드 데이터")
+
+        data_source = st.radio(
+            "데이터 선택",
+            data_options,
+            index=default_index,
+            help="발표용 기본 데이터, 직접 업로드한 파일, 가상 예시 데이터 중 선택합니다.",
+        )
         bins = st.slider("히스토그램 구간", min_value=5, max_value=30, value=15)
 
         st.divider()
@@ -351,10 +381,15 @@ def main() -> None:
     st.caption("성적 분포, 이상치, 정규성 여부를 한 화면에서 확인하는 발표용 대시보드입니다.")
 
     try:
-        if uploaded_file is not None and not use_sample:
+        if data_source == "내장 성적 데이터" and default_df is not None:
+            df = default_df
+            data_source_label = "내장 성적 데이터"
+        elif data_source == "업로드 데이터" and uploaded_file is not None:
             df = read_uploaded_file(uploaded_file)
+            data_source_label = f"업로드 데이터 ({uploaded_file.name})"
         else:
             df = make_sample_scores()
+            data_source_label = "가상 예시 데이터"
     except Exception as error:
         st.error(f"파일을 읽는 중 문제가 생겼습니다: {error}")
         return
@@ -367,6 +402,8 @@ def main() -> None:
 
     with st.sidebar:
         score_column = st.selectbox("점수 열 선택", numeric_columns)
+
+    st.caption(f"현재 사용 중인 데이터: {data_source_label}")
 
     scores = pd.to_numeric(df[score_column], errors="coerce").dropna()
 
