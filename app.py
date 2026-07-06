@@ -16,6 +16,7 @@ DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_DATASETS = {
     "확통": DATA_DIR / "scores.csv",
     "영어": DATA_DIR / "english_scores.csv",
+    "문학": DATA_DIR / "literature_scores.csv",
 }
 
 
@@ -461,7 +462,7 @@ def main() -> None:
             st.info(normality_message)
 
             with st.expander("데이터 미리보기"):
-                st.dataframe(df.head(20), use_container_width=True)
+                st.dataframe(df, use_container_width=True, height=420)
 
     with tab2:
         st.subheader("표본평균 시뮬레이터")
