@@ -143,11 +143,13 @@ def make_qq_plot(scores: pd.Series):
     return fig
 
 
-def simulate_sample_means(scores: pd.Series, sample_size: int, num_trials: int, seed: int) -> np.ndarray:
+def simulate_sample_means(
+    scores: pd.Series, sample_size: int, num_trials: int, seed: int, with_replacement: bool
+) -> np.ndarray:
     rng = np.random.default_rng(seed)
     score_values = scores.to_numpy()
     sample_means = [
-        rng.choice(score_values, size=sample_size, replace=False).mean()
+        rng.choice(score_values, size=sample_size, replace=with_replacement).mean()
         for _ in range(num_trials)
     ]
     return np.array(sample_means)
@@ -196,6 +198,7 @@ def simulate_confidence_intervals(
     num_trials: int,
     confidence_level: float,
     seed: int,
+    with_replacement: bool,
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     score_values = scores.to_numpy()
@@ -204,7 +207,7 @@ def simulate_confidence_intervals(
     rows = []
 
     for trial in range(1, num_trials + 1):
-        sample = rng.choice(score_values, size=sample_size, replace=False)
+        sample = rng.choice(score_values, size=sample_size, replace=with_replacement)
         sample_mean = sample.mean()
         standard_error = sample.std(ddof=1) / np.sqrt(sample_size)
         margin = z_score * standard_error
@@ -230,9 +233,10 @@ def calculate_single_sample_interval(
     sample_size: int,
     confidence_level: float,
     seed: int,
+    with_replacement: bool,
 ) -> dict:
     rng = np.random.default_rng(seed)
-    sample = rng.choice(scores.to_numpy(), size=sample_size, replace=False)
+    sample = rng.choice(scores.to_numpy(), size=sample_size, replace=with_replacement)
     sample_mean = sample.mean()
     sample_std = sample.std(ddof=1)
     standard_error = sample_std / np.sqrt(sample_size)
@@ -479,7 +483,9 @@ def main() -> None:
             if "clt_trial_mode" not in st.session_state:
                 st.session_state.clt_trial_mode = "slider"
 
-            max_sample_size = min(len(scores), 50)
+            clt_with_replacement = st.toggle("복원추출", value=False, key="clt_with_replacement")
+            clt_sampling_label = "복원추출" if clt_with_replacement else "비복원추출"
+            max_sample_size = 1000 if clt_with_replacement else min(len(scores), 50)
             default_sample_size = min(30, max_sample_size)
             sample_size = st.slider(
                 "한 번에 뽑을 학생 수 (표본 크기 n)",
@@ -529,16 +535,16 @@ def main() -> None:
                     x_axis_range = (0, 100)
                 else:
                     x_axis_range = (x_min, x_max)
-            st.caption("슬라이더를 조정하면 오른쪽 그래프가 자동으로 갱신됩니다.")
+            st.caption(f"현재 추출 방식: {clt_sampling_label}. 슬라이더를 조정하면 오른쪽 그래프가 자동으로 갱신됩니다.")
 
-        sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed))
+        sample_means = simulate_sample_means(scores, sample_size, num_trials, int(seed), clt_with_replacement)
         population_mean = scores.mean()
         sample_means_std = sample_means.std(ddof=1) if len(sample_means) >= 2 else 0.0
         x_axis_label = "자동" if x_axis_range is None else f"{x_axis_range[0]}~{x_axis_range[1]}점"
 
         with result_col:
             st.caption(
-                f"현재 설정: `{score_column}` 열, n={sample_size}, {num_trials}회, 시드={seed}. "
+                f"현재 설정: `{score_column}` 열, {clt_sampling_label}, n={sample_size}, {num_trials}회, 시드={seed}. "
                 f"x축: {x_axis_label}. 슬라이더를 조정하면 그래프가 자동으로 갱신됩니다."
             )
             st.pyplot(
@@ -559,7 +565,7 @@ def main() -> None:
             result_col3.metric("표본평균들의 표준편차", f"{sample_means_std:.2f}")
 
             st.info(
-                f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하면 표본평균들이 "
+                f"표본 크기 **n={sample_size}**로 {num_trials}번 반복하고 **{clt_sampling_label}**을 적용하면 표본평균들이 "
                 f"전체 평균 **{population_mean:.1f}점** 주변에 모입니다. "
                 "표본 크기를 키울수록 분포가 더 좁고 뾰족해지는지 비교해 보세요."
             )
@@ -568,9 +574,10 @@ def main() -> None:
             st.markdown(
                 """
                 1. 먼저 표본 크기를 `3`, 반복 횟수를 `50`으로 맞추고 슬라이더를 놓아 표본평균이 크게 흔들리는 모습을 보여줍니다.
-                2. `x축 자동 조절`을 끄고 x축을 `0~100점`으로 고정하면 분포가 얼마나 넓게 퍼졌는지 비교하기 쉽습니다.
-                3. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
-                4. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
+                2. `복원추출`을 켜면 같은 점수가 여러 번 뽑힐 수 있고, 끄면 한 번 뽑힌 점수는 같은 시행 안에서 다시 뽑히지 않는다고 설명합니다.
+                3. `x축 자동 조절`을 끄고 x축을 `0~100점`으로 고정하면 분포가 얼마나 넓게 퍼졌는지 비교하기 쉽습니다.
+                4. 다음으로 표본 크기를 `30`, 반복 횟수를 `500`으로 늘려 그래프가 전체 평균 주변으로 모이는 모습을 비교합니다.
+                5. 결론으로 표본 하나하나는 불안정할 수 있지만, 충분한 크기의 표본평균은 예측 가능한 분포를 만든다고 설명합니다.
                 """
             )
 
@@ -589,7 +596,9 @@ def main() -> None:
 
         with ci_control_col:
             st.markdown("#### 조작 패널")
-            ci_max_sample_size = min(len(scores), 100)
+            ci_with_replacement = st.toggle("복원추출", value=False, key="ci_with_replacement")
+            ci_sampling_label = "복원추출" if ci_with_replacement else "비복원추출"
+            ci_max_sample_size = 1000 if ci_with_replacement else min(len(scores), 100)
             ci_default_sample_size = min(30, ci_max_sample_size)
             ci_sample_size = st.slider(
                 "표본 크기 n",
@@ -615,7 +624,7 @@ def main() -> None:
                 ci_x_range = (40, 100)
             else:
                 ci_x_range = (ci_x_min, ci_x_max)
-            st.caption("슬라이더를 조정하면 오른쪽 신뢰구간 차트가 자동으로 갱신됩니다.")
+            st.caption(f"현재 추출 방식: {ci_sampling_label}. 슬라이더를 조정하면 오른쪽 신뢰구간 차트가 자동으로 갱신됩니다.")
 
         interval_df = simulate_confidence_intervals(
             scores,
@@ -623,6 +632,7 @@ def main() -> None:
             ci_trials,
             ci_confidence,
             int(ci_seed),
+            ci_with_replacement,
         )
         population_mean = scores.mean()
         hit_count = int(interval_df["contains_mean"].sum())
@@ -631,7 +641,7 @@ def main() -> None:
 
         with ci_result_col:
             st.caption(
-                f"현재 설정: n={ci_sample_size}, {ci_trials}회, 신뢰수준={ci_confidence:.1f}%, "
+                f"현재 설정: {ci_sampling_label}, n={ci_sample_size}, {ci_trials}회, 신뢰수준={ci_confidence:.1f}%, "
                 f"점수축={ci_x_range[0]}~{ci_x_range[1]}점. 0점은 아래, 100점은 위쪽 방향입니다."
             )
             fig = make_confidence_interval_plot(interval_df, population_mean, ci_confidence, ci_x_range)
@@ -645,17 +655,18 @@ def main() -> None:
 
             st.info(
                 f"{ci_confidence:.1f}% 신뢰수준은 같은 방법을 반복했을 때 구간이 실제 평균을 포함하는 비율을 뜻합니다. "
-                "표본 크기 n을 키우면 구간 길이가 짧아져 추정이 더 정밀해지는지 확인해 보세요."
+                f"현재는 **{ci_sampling_label}**으로 표본을 만들고 있습니다. 표본 크기 n을 키우면 구간 길이가 짧아져 추정이 더 정밀해지는지 확인해 보세요."
             )
 
         with st.expander("발표 조작 예시"):
             st.markdown(
                 """
                 1. 신뢰수준을 `95%`, 반복 횟수를 `100`으로 두고 초록색 구간과 빨간색 구간의 비율을 확인합니다.
-                2. 점수축은 아래가 낮은 점수, 위가 높은 점수입니다. 시행 번호는 가로 방향으로 나열됩니다.
-                3. 표본 크기 `n`을 키우면 세로 신뢰구간 길이가 짧아지는지 확인합니다.
-                4. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
-                5. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
+                2. `복원추출`을 켜고 끄면서 같은 절차라도 표본을 만드는 방식이 달라진다는 점을 설명합니다.
+                3. 점수축은 아래가 낮은 점수, 위가 높은 점수입니다. 시행 번호는 가로 방향으로 나열됩니다.
+                4. 표본 크기 `n`을 키우면 세로 신뢰구간 길이가 짧아지는지 확인합니다.
+                5. 신뢰수준을 높이면 구간 길이가 길어지지만 성공 비율이 높아지는 경향을 비교합니다.
+                6. 결론으로 신뢰구간은 한 번의 구간이 맞을 확률이 아니라, 반복 절차의 성공률을 뜻한다고 설명합니다.
                 """
             )
 
@@ -674,7 +685,9 @@ def main() -> None:
 
         with single_control_col:
             st.markdown("#### 조작 패널")
-            single_max_sample_size = min(len(scores), 100)
+            single_with_replacement = st.toggle("복원추출", value=False, key="single_with_replacement")
+            single_sampling_label = "복원추출" if single_with_replacement else "비복원추출"
+            single_max_sample_size = 1000 if single_with_replacement else min(len(scores), 100)
             single_default_sample_size = min(30, single_max_sample_size)
             single_sample_size = st.slider(
                 "표본 크기 n",
@@ -701,19 +714,20 @@ def main() -> None:
                 single_x_range = (0, 100)
             else:
                 single_x_range = (single_x_min, single_x_max)
-            st.caption("시드를 바꾸면 새로운 단일 표본을 확인할 수 있습니다.")
+            st.caption(f"현재 추출 방식: {single_sampling_label}. 시드를 바꾸면 새로운 단일 표본을 확인할 수 있습니다.")
 
         single_result = calculate_single_sample_interval(
             scores,
             single_sample_size,
             single_confidence,
             int(single_seed),
+            single_with_replacement,
         )
 
         with single_result_col:
             status_text = "포함" if single_result["contains_mean"] else "미포함"
             st.caption(
-                f"현재 설정: n={single_sample_size}, 신뢰수준={single_confidence:.1f}%, "
+                f"현재 설정: {single_sampling_label}, n={single_sample_size}, 신뢰수준={single_confidence:.1f}%, "
                 f"시드={int(single_seed)}, 실제 평균 {status_text}"
             )
             st.pyplot(
@@ -744,14 +758,14 @@ def main() -> None:
                 st.error("이번 표본으로 만든 신뢰구간은 실제 전체 평균을 포함하지 못했습니다.")
 
             st.info(
-                "3단계는 현실처럼 표본을 한 번만 뽑아 하나의 신뢰구간을 만드는 장면을 보여주고, "
-                "4단계는 이 절차를 여러 번 반복했을 때의 성공률을 보여줍니다."
+                f"현재 4단계는 **{single_sampling_label}**으로 한 번의 표본을 만들고 있습니다. "
+                "3단계는 같은 절차를 여러 번 반복했을 때의 성공률을 보여주고, 4단계는 한 번의 표본으로 만든 신뢰구간을 보여줍니다."
             )
 
         with st.expander("발표 조작 예시"):
             st.markdown(
                 """
-                1. 표본 크기와 신뢰수준을 정한 뒤, 한 번 뽑은 표본의 히스토그램을 봅니다.
+                1. 표본 크기와 신뢰수준을 정한 뒤, `복원추출`을 켜거나 끄면서 한 번 뽑은 표본의 차이를 비교합니다.
                 2. `곡선 표시`를 켜면 표본 분포의 부드러운 모양을 함께 볼 수 있습니다.
                 3. 파란 선은 표본평균, 노란 점선은 실제 전체 평균입니다.
                 4. 색칠된 신뢰구간 안에 노란 점선이 들어오면 이번 표본은 성공한 사례입니다.
